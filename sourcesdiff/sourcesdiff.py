@@ -12,7 +12,6 @@ class Sources(object):
         self.default = None
         self.remotes = {}
         self.projects = []
-        self.project_set = set()
 
     def _attr_to_dict(self, input):
         output = {}
@@ -31,20 +30,24 @@ class Sources(object):
             attrs = self._attr_to_dict(project.attributes)
             attrs.setdefault('remote', self.default['remote'])
             self.projects.append(attrs)
-            self.project_set.add((attrs['name'], attrs['remote'], attrs['revision']))
+
+    def _to_set(self):
+        return set([(x['name'], x['remote'], x['revision']) for x in self.projects])
 
     def diff(self, other):
         output = []
-        projects = self.project_set - other.project_set
+        projects = self._to_set() - other._to_set()
 
         # TBD: automatically determine which is newer and older
 
         for project in projects:
             name = project[0]
             if name not in [x['name'] for x in self.projects]:
-                print 'project %s added to %s' % (name, self.filename)
+                output.append({'new_project': name,
+                               'filename': self.filename})
             elif name not in [x['name'] for x in other.projects]:
-                print 'project %s added to %s' % (name, other.filename)
+                output.append({'new_project': name,
+                               'filename': other.filename})
             else:
                 this_commit = [x for x in self.projects if x['name'] == name][0]
                 other_commit = [x for x in other.projects if x['name'] == name][0]
