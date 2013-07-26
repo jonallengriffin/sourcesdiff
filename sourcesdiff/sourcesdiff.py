@@ -20,6 +20,7 @@ class Sources(object):
         return output
 
     def parse(self):
+        # TBD: Might as well use BeautifulSoup here, instead of xml_parse
         dom = xml_parse(self.filename)
         element = dom.getElementsByTagName('default')[0]
         self.default = self._attr_to_dict(element.attributes)
@@ -38,7 +39,8 @@ class Sources(object):
         output = []
         projects = self._to_set() - other._to_set()
 
-        # TBD: automatically determine which is newer and older
+        # TBD: automatically determine which is newer and older; we currently
+        # assume that 'self' is newer than 'other'.
 
         for project in projects:
             name = project[0]
@@ -55,18 +57,24 @@ class Sources(object):
                 if this_commit['remote'] != other_commit['remote']:
                     raise Exception('remotes for project %s changed!' % name)
 
-                print '\nprocessing project %s, commits %s..%s' % (name, this_commit['revision'], other_commit['revision'])
+                print 'processing project %s,\n\tcommits %s..%s' % (name, this_commit['revision'], other_commit['revision'])
 
-                fetch = self.remotes[this_commit['remote']][len('https://git.mozilla.org/'):]
+                # The 'remote' in sources.xml refers to a git.mozilla.org url
+                # that can be cloned with git, but can't be browsed; we need to
+                # convert that into a gitweb URL that we can use to load history.
+                path = self.remotes[this_commit['remote']][len('https://git.mozilla.org/'):]
                 git = this_commit['name']
                 if not git.endswith('.git'):
                     git = "%s.git" % git
-                baseurl = 'http://git.mozilla.org/?p=%s/%s' % (fetch, git)
-                url = "%s;a=history;hb=%s" % (baseurl, this_commit['revision'])
+                baseurl = 'http://git.mozilla.org/?p=%s/%s' % (path, git)
+                historyurl = "%s;a=history;hb=%s" % (baseurl, this_commit['revision'])
+
+                fp = urllib2.urlopen(historyurl)
+                data = fp.read()
 
                 commits = []
-                fp = urllib2.urlopen(url)
-                data = fp.read()
+                # This code is very dependent on the stucture of the gitweb
+                # HTML served by git.mozilla.org.
                 soup = BeautifulSoup(data)
                 table = soup.select('.history')[0]
                 rows = table.find_all('tr')
@@ -75,17 +83,17 @@ class Sources(object):
                     subject = row.select('.subject')
                     if len(author) and len(subject):
                         href = subject[0]['href']
-                        href = href[href.find('h=') + 2:]
+                        revision = href[href.find('h=') + 2:]
                         commits.append({
                             'commit': subject[0].get_text(),
-                            'revision': href,
+                            'revision': revision,
                             'author': author[0].find_all('a')[0].get_text(),
                         })
-                        if other_commit['revision'] == href:
+                        if other_commit['revision'] == revision:
                             break
 
                 output.append({
-                    'repo': 'http://git.mozilla.org/?p=%s/%s' % (fetch, git),
+                    'repo': baseurl,
                     self.filename: this_commit['revision'],
                     other.filename: other_commit['revision'],
                     'commits': commits
