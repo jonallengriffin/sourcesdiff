@@ -35,7 +35,7 @@ class Sources(object):
     def _to_set(self):
         return set([(x['name'], x['remote'], x['revision']) for x in self.projects])
 
-    def diff(self, other):
+    def diff(self, other, output_file=None):
         output = []
         projects = self._to_set() - other._to_set()
 
@@ -99,14 +99,20 @@ class Sources(object):
                     'commits': commits
                 })
 
-        # TBD: optionally dump to file
-        print json.dumps(output, indent=2)
+        if output_file:
+            with open(output_file, 'w') as f:
+                f.write(json.dumps(output, indent=2))
+        else:
+            print json.dumps(output, indent=2)
 
 
 class SourcesDiffParser(OptionParser):
 
     def __init__(self, **kwargs):
         OptionParser.__init__(self, **kwargs)
+        self.add_option('-o', '--output',
+                        dest='output_file',
+                        help='write result to specified file')
 
 
 if __name__ == "__main__":
@@ -120,4 +126,4 @@ if __name__ == "__main__":
     first.parse()
     second = Sources(args[1])
     second.parse()
-    first.diff(second)
+    first.diff(second, output_file=options.output_file)
